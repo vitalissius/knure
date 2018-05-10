@@ -24,6 +24,12 @@ int open_message_queue(key_t key) {
     if (qid == -1) {
         return -1;
     }
+    struct msqid_ds prop;
+    msgctl(qid, IPC_STAT, &prop);
+    printf("%lu\n", prop.msg_qbytes);
+    prop.msg_qbytes = 1 * MESSAGE_DATA_SIZE;
+    printf("%lu\n", prop.msg_qbytes);
+    msgctl(qid, IPC_SET, &prop);
     return qid;
 }
 

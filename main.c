@@ -17,29 +17,88 @@ int queue_id = 0;
 
 static message_t msg;
 
+pthread_mutex_t console_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 sem_t sem_exit;
 
 void* producer(void* arg) {
+    printf("Producer start\n");
     FILE* input_file = (FILE*) arg;
-
-    if ((queue_id = open_message_queue(IPC_ALWAYS_NEY_QUEUE)) == -1) {
-        perror("");
-        pthread_exit(NULL);
-    }
 
     while (!feof(input_file)) {
         fscanf(input_file, "%d\t%d\t%c\t%d\n", &msg.group_numbers, &msg.character_numbers, &msg.character, &msg.delay);
         msg.message_type = MESSAGE_TYPE;
-        print_message(&msg);
+        //print_message(&msg);
         int res;
+        printf("try push\n");
         if ((res = msgsnd(queue_id, &msg, MESSAGE_DATA_SIZE, 0)) == -1) {
-            perror("");
+            perror("WOW: ");
+        }
+        printf("push ok\n");
+    }
+    printf("Producer exit\n");
+    return NULL;//
+    pthread_exit(NULL);
+}
+
+int count = 5;
+
+void* handler(void* arg) {
+    static int cnum = 0;
+    cnum++;
+    printf("Handler %d start\n", cnum);
+    message_t* pm = (message_t*) arg;
+
+    for (int i = 0; i < pm->group_numbers; i++) {
+        pthread_mutex_lock(&console_mutex);
+        for (int j = 0; j < pm->character_numbers; j++) {
+            fprintf(stderr, "%c", pm->character);
+            milli_sleep(pm->delay);
+        }
+        fprintf(stderr, "\n");
+        pthread_mutex_unlock(&console_mutex);
+    }
+
+    --count;
+
+    free(pm);
+
+    if (count == 0) {
+        sem_post(&sem_exit);
+    }
+    printf("Handler %d exit\n", cnum);
+    return NULL;
+//    pthread_exit(NULL);
+}
+
+void* consumer(void* arg) {
+    printf("Consumer start\n");
+    message_t m;
+    while (1) {
+        int res;
+        
+        printf("try pop\n");
+        if ((res = msgrcv(queue_id, &m, MESSAGE_DATA_SIZE, MESSAGE_TYPE, 0)) != -1) {
+            printf("pop ok\n");
+
+            message_t* pm = (message_t*) malloc(sizeof(message_t));
+            pm->message_type = m.message_type;
+            pm->group_numbers = m.group_numbers;
+            pm->character_numbers = m.character_numbers;
+            pm->character = m.character;
+            pm->delay = m.delay;
+
+            pthread_t thread_handler;
+            pthread_create(&thread_handler, NULL, handler, pm);
+            pthread_detach(thread_handler);
+        } else if (errno == EIDRM) {
+            printf("Delete queue\n");
+            break;
         }
     }
-    printf("Post...\n");
-        sem_post(&sem_exit);
-//    return NULL;
-    pthread_exit(NULL);
+    printf("Consumer exit\n");
+    return NULL;
+//    pthread_exit(NULL);
 }
 
 int main(int argc, char* argv[])
@@ -57,6 +116,12 @@ int main(int argc, char* argv[])
         fprintf(stderr, "File %s not found!\n", file_name);
         return EXIT_FAILURE;
     }
+    
+    if ((queue_id = open_message_queue(IPC_ALWAYS_NEY_QUEUE)) == -1) {
+        perror("");
+        return EXIT_FAILURE;
+    }
+
 
     sem_init(&sem_exit, 0, 0);
 
@@ -64,33 +129,32 @@ int main(int argc, char* argv[])
     pthread_create(&thread_producer, NULL, producer, input_file);
     pthread_detach(thread_producer);
 //    pthread_join(thread_producer, NULL);
+
+    pthread_t thread_consumer;
+    pthread_create(&thread_consumer, NULL, consumer, NULL);
+    pthread_detach(thread_consumer);
+//    pthread_join(thread_consumer, NULL);
+
+
     printf("Wait...\n");
     sem_wait(&sem_exit);
-    milli_sleep(1);
     printf("After wait...\n");
-    
-    sem_destroy(&sem_exit);
-    
-    fclose(input_file);
-
-
-    static message_t m2;
-    msgrcv(queue_id, &m2, MESSAGE_DATA_SIZE, MESSAGE_TYPE, IPC_NOWAIT);
-    print_message(&m2);
-    msgrcv(queue_id, &m2, MESSAGE_DATA_SIZE, MESSAGE_TYPE, IPC_NOWAIT);
-    print_message(&m2);
-    msgrcv(queue_id, &m2, MESSAGE_DATA_SIZE, MESSAGE_TYPE, IPC_NOWAIT);
-    print_message(&m2);
-    msgrcv(queue_id, &m2, MESSAGE_DATA_SIZE, MESSAGE_TYPE, IPC_NOWAIT);
-    print_message(&m2);
-    msgrcv(queue_id, &m2, MESSAGE_DATA_SIZE, MESSAGE_TYPE, IPC_NOWAIT);
-    print_message(&m2);
-
-
     int res = msgctl(queue_id, IPC_RMID, NULL);
     if (res != 0) {
         printf("Cannot remove queue\n");
     }
+    printf("Queue is removed\n");
+    sem_destroy(&sem_exit);
+
+    pthread_mutex_destroy(&console_mutex);
+    fclose(input_file);
+
+    usleep(100);// time to correct destroy all threads
+    
+    
+
+
+    printf("Main exit\n");
 
     return 0;
 }

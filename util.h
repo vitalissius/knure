@@ -1,7 +1,7 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#define _DEFAULT_SOURCE 1
+#include "message.h"
 
 #include <sys/ipc.h>
 #include <sys/msg.h>
