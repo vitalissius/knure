@@ -8,7 +8,7 @@ extern const long MESSAGE_TYPE;
 /**
  * The size of useful information of message_t type (without message_type field)
  */
-extern const int MESSAGE_SIZE;
+extern const int MESSAGE_DATA_SIZE;
 
 typedef struct {
     long message_type;

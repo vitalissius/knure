@@ -1,6 +1,7 @@
 #include "message.h"
 #include "util.h"
 
+#include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -11,10 +12,39 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include <bits/string_fortified.h>
+
+int queue_id = 0;
+
+static message_t msg;
+
+sem_t sem_exit;
+
+void* producer(void* arg) {
+    FILE* input_file = (FILE*) arg;
+
+    if ((queue_id = open_message_queue(IPC_ALWAYS_NEY_QUEUE)) == -1) {
+        perror("");
+        pthread_exit(NULL);
+    }
+
+    while (!feof(input_file)) {
+        fscanf(input_file, "%d\t%d\t%c\t%d\n", &msg.group_numbers, &msg.character_numbers, &msg.character, &msg.delay);
+        msg.message_type = MESSAGE_TYPE;
+        print_message(&msg);
+        int res;
+        if ((res = msgsnd(queue_id, &msg, MESSAGE_DATA_SIZE, 0)) == -1) {
+            perror("");
+        }
+    }
+    printf("Post...\n");
+        sem_post(&sem_exit);
+//    return NULL;
+    pthread_exit(NULL);
+}
 
 int main(int argc, char* argv[])
 {
+    char* file_name = "tasks.csv";
     int thrs = 3;
     int msgs = 5;
 
@@ -22,23 +52,38 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    int queue_id = msgget(IPC_PRIVATE, IPC_CREAT | 0777);
-    if (queue_id == -1) {
+    FILE* input_file = fopen(file_name, "r");
+    if (!input_file) {
+        fprintf(stderr, "File %s not found!\n", file_name);
         return EXIT_FAILURE;
     }
 
+    sem_init(&sem_exit, 0, 0);
 
-    static message_t m;
-    m.message_type = MESSAGE_TYPE;
-    m.group_numbers = 2;
-    m.character_numbers = 3;
-    m.character = '4';
-    m.delay = 5;
-    msgsnd(queue_id, &m, MESSAGE_SIZE, IPC_NOWAIT);
+    pthread_t thread_producer;
+    pthread_create(&thread_producer, NULL, producer, input_file);
+    pthread_detach(thread_producer);
+//    pthread_join(thread_producer, NULL);
+    printf("Wait...\n");
+    sem_wait(&sem_exit);
+    milli_sleep(1);
+    printf("After wait...\n");
+    
+    sem_destroy(&sem_exit);
+    
+    fclose(input_file);
 
 
-    message_t m2;
-    msgrcv(queue_id, &m2, MESSAGE_SIZE, MESSAGE_TYPE, IPC_NOWAIT);
+    static message_t m2;
+    msgrcv(queue_id, &m2, MESSAGE_DATA_SIZE, MESSAGE_TYPE, IPC_NOWAIT);
+    print_message(&m2);
+    msgrcv(queue_id, &m2, MESSAGE_DATA_SIZE, MESSAGE_TYPE, IPC_NOWAIT);
+    print_message(&m2);
+    msgrcv(queue_id, &m2, MESSAGE_DATA_SIZE, MESSAGE_TYPE, IPC_NOWAIT);
+    print_message(&m2);
+    msgrcv(queue_id, &m2, MESSAGE_DATA_SIZE, MESSAGE_TYPE, IPC_NOWAIT);
+    print_message(&m2);
+    msgrcv(queue_id, &m2, MESSAGE_DATA_SIZE, MESSAGE_TYPE, IPC_NOWAIT);
     print_message(&m2);
 
 
@@ -46,7 +91,6 @@ int main(int argc, char* argv[])
     if (res != 0) {
         printf("Cannot remove queue\n");
     }
-
 
     return 0;
 }

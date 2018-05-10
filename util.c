@@ -19,9 +19,18 @@ int parse_arguments(int argc, char* argv[], int* thrs, int* msgs) {
     return 0;
 }
 
+int open_message_queue(key_t key) {
+    int qid = msgget(key, IPC_CREAT | 0660);
+    if (qid == -1) {
+        return -1;
+    }
+    return qid;
+}
+
 int milli_sleep(int milliseconds) {
-    struct timespec ts;
-    ts.tv_sec = milliseconds / 1000;
-    ts.tv_nsec = (milliseconds % 1000) * 1000 * 1000;
-    return nanosleep(&ts, NULL);
+    return usleep(milliseconds * 1000);
+//    struct timespec ts;
+//    ts.tv_sec = milliseconds / 1000;
+//    ts.tv_nsec = (milliseconds % 1000) * 1000 * 1000;
+//    return nanosleep(&ts, NULL);
 }
