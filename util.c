@@ -19,24 +19,41 @@ int parse_arguments(int argc, char* argv[], int* thrs, int* msgs) {
     return 0;
 }
 
-int open_message_queue(key_t key) {
-    int qid = msgget(key, IPC_CREAT | 0660);
+int open_message_queue(key_t key, int max_size) {
+    int permision_rights = 0660;
+    int qid = msgget(key, IPC_CREAT | permision_rights);
     if (qid == -1) {
         return -1;
     }
-    struct msqid_ds prop;
-    msgctl(qid, IPC_STAT, &prop);
-    printf("%lu\n", prop.msg_qbytes);
-    prop.msg_qbytes = 1 * MESSAGE_DATA_SIZE;
-    printf("%lu\n", prop.msg_qbytes);
-    msgctl(qid, IPC_SET, &prop);
+    struct msqid_ds qprop;
+    msgctl(qid, IPC_STAT, &qprop);
+    qprop.msg_qbytes = max_size * MESSAGE_DATA_SIZE;
+    msgctl(qid, IPC_SET, &qprop);
     return qid;
 }
 
+int micro_sleep(int microseconds) {
+    return usleep(microseconds);
+}
+
 int milli_sleep(int milliseconds) {
-    return usleep(milliseconds * 1000);
-//    struct timespec ts;
-//    ts.tv_sec = milliseconds / 1000;
-//    ts.tv_nsec = (milliseconds % 1000) * 1000 * 1000;
-//    return nanosleep(&ts, NULL);
+    return micro_sleep(milliseconds * 1000);
+}
+
+int check_format(FILE* input_file) {
+    int lines_number = 0;
+    int n1, n2, n3;
+    char c;
+    while (1) {
+        int res = fscanf(input_file, "%d\t%d\t%c\t%d\n", &n1, &n2, &c, &n3);
+        if (res == 4) {
+            lines_number++;
+        } else if (res == EOF) {
+            break;
+        } else {
+            return -1;
+        }
+    }
+    rewind(input_file);
+    return lines_number;
 }
