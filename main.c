@@ -1,95 +1,15 @@
 #include "message.h"
+#include "procedures.h"
 #include "util.h"
 
-#include <sys/ipc.h>
 #include <sys/msg.h>
-#include <sys/time.h>
-#include <sys/types.h>
-
-#include <errno.h>
-#include <pthread.h>
-#include <semaphore.h>
-#include <string.h>
-#include <time.h>
-#include <unistd.h>
 
 int g_queue_id = 0;
-
-/* Indicates that all messages were processed and the program may stop executing */
-sem_t g_sem_exit;
-
+int g_counter = 0;
+sem_t g_sem_exit;/* Indicates that all messages were processed and the program may stop executing */
 sem_t g_sem_thrs;
-
 pthread_mutex_t g_cons_mtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t g_decr_mtx = PTHREAD_MUTEX_INITIALIZER;
-
-int g_counter = 0;
-
-void* producer(void* arg) {
-    FILE* input_stream = (FILE*) arg;
-
-    while (!feof(input_stream)) {
-        message_t m;
-        /* Zeroing mem, or else valgrind begins warning about uninitialized mem*/
-        memset(&m, 0, sizeof(message_t));
-
-        fscanf(input_stream, "%d\t%d\t%c\t%d\n",
-                &m.group_numbers, &m.character_numbers, &m.character, &m.delay);
-        m.message_type = MESSAGE_TYPE;
-
-        if (msgsnd(g_queue_id, &m, MESSAGE_DATA_SIZE, 0) == -1) {
-            perror("Sending error: ");
-            return NULL;
-        }
-    }
-    return NULL;
-}
-
-void* handler(void* arg) {
-    message_t* pm = (message_t*) arg;
-
-    for (int i = 0; i < pm->group_numbers; i++) {
-        pthread_mutex_lock(&g_cons_mtx);
-        for (int j = 0; j < pm->character_numbers; j++) {
-            fprintf(stderr, "%c", pm->character);
-            milli_sleep(pm->delay);
-        }
-        fprintf(stderr, "\n");
-        pthread_mutex_unlock(&g_cons_mtx);
-    }
-
-    free(pm);
-    sem_post(&g_sem_thrs);
-
-    pthread_mutex_lock(&g_cons_mtx);
-    if (--g_counter == 0) {
-        sem_post(&g_sem_exit);
-    }
-    pthread_mutex_unlock(&g_cons_mtx);
-
-    return NULL;
-}
-
-void* consumer(void* arg) {
-    message_t m;
-    while (1) {
-        int res;
-
-        sem_wait(&g_sem_thrs);
-        if ((res = msgrcv(g_queue_id, &m, MESSAGE_DATA_SIZE, MESSAGE_TYPE, 0)) != -1) {
-            message_t* pm = (message_t*) malloc(sizeof(message_t));
-            memcpy(pm, &m, sizeof(message_t));
-
-            pthread_t thread_handler;
-            pthread_create(&thread_handler, NULL, handler, pm);
-            pthread_detach(thread_handler);
-        } else if (errno == EIDRM) {
-            /* Queue is deleted - nothing to do - exit */
-            break;
-        }
-    }
-    return NULL;
-}
 
 int main(int argc, char* argv[])
 {
@@ -139,8 +59,7 @@ int main(int argc, char* argv[])
 
     sem_wait(&g_sem_exit);  /* Waiting while all handlers are running */
 
-    int res = msgctl(g_queue_id, IPC_RMID, NULL);
-    if (res != 0) {
+    if ((msgctl(g_queue_id, IPC_RMID, NULL)) != 0) {
         printf("Cannot remove queue\n");
     }
 
