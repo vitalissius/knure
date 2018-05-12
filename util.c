@@ -1,20 +1,24 @@
 #include "util.h"
 
-int parse_arguments(int argc, char* argv[], int* thrs, int* msgs) {
+int parse_arguments(int argc, char* argv[], int* t, int* q) {
     int opt;
     while ((opt = getopt(argc, argv, "q:t:")) != -1) {
         switch (opt) {
             case 'q':
-                *msgs = atoi(optarg);
+                *q = atoi(optarg);
                 break;
             case 't':
-                *thrs = atoi(optarg);
+                *t = atoi(optarg);
                 break;
             case '?':
             default:
-                fprintf(stderr, "Usage: %s [-q messages-number] [-t threads-number]\n", argv[0]);
+                fprintf(stderr, "Usage: %s [-q queue-size] [-t threads-number]\n", argv[0]);
                 return -1;
         }
+    }
+    if (*t < 1 || *q < 1) {
+        fprintf(stderr, "Queue-size and threads-number must be bigger or equal 1\n");
+        return -1;
     }
     return 0;
 }

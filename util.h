@@ -12,7 +12,7 @@
 
 #define IPC_NEW_QUEUE IPC_PRIVATE
 
-int parse_arguments(int argc, char* argv[], int* thrs, int* msgs);
+int parse_arguments(int argc, char* argv[], int* t, int* q);
 
 int open_message_queue(key_t key, int max_size);
 
