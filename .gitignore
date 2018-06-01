@@ -1,0 +1,7 @@
+*.dep.inc
+Makefile
+/*/build
+/*/dist
+*.o
+/*/nbproject
+gen_prog
